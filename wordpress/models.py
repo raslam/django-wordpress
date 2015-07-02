@@ -6,6 +6,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
 from django.forms import model_to_dict
 
+
 STATUS_CHOICES = (
     ('closed', 'closed'),
     ('open', 'open'),
@@ -401,6 +402,7 @@ class Post(WordPressModel):
         categories = self.categories() if self.categories() else []
         # Post Detail
         data = {"post_details": model_to_dict(self, ["id", "author", "title", "post_date", "excerpt", "content"])}
+        data["post_details"].update(PostMeta.get_featured_image(self))
 
         # Author Details
         data.update({"author_details":
@@ -438,6 +440,25 @@ class PostMeta(WordPressModel):
     def __unicode__(self):
         return u"%s: %s" % (self.key, self.value)
 
+    @classmethod
+    def get_value(cls, queryset, key):
+        filtered_queryset = queryset.filter(key=key)
+        if filtered_queryset:
+            filtered_queryset = filtered_queryset.values_list('value', flat=True)
+            return filtered_queryset[0]
+        return None
+
+    @classmethod
+    def get_featured_image(cls, post):
+        image_info = {"image": "", "image_meta": ""}
+        post_meta = cls.objects.filter(post=post)
+        image_post_id = cls.get_value(post_meta, "_thumbnail_id")
+        if image_post_id:
+            post_image_meta = cls.objects.filter(post_id=image_post_id)
+            if post_image_meta:
+                image_info["image"] = cls.get_value(post_image_meta, "_wp_attached_file")
+                image_info["image_meta"] = cls.get_value(post_image_meta, "_wp_attachment_metadata")
+        return image_info
 
 class Comment(WordPressModel):
     """
