@@ -21,7 +21,7 @@ class AuthorArchive(generic.list.ListView):
     allow_empty = True
     context_object_name = "post_list"
     paginate_by = PER_PAGE
-    template_name = "wordpress/post_list.html"
+    template_name = "wordpress/post_archive.html"
     queryset = None
     author = None
 
@@ -29,7 +29,7 @@ class AuthorArchive(generic.list.ListView):
         try:
             self.author = User.objects.get(login=self.kwargs['username'])
         except User.DoesNotExist:
-            raise Http404
+            self.author = None
         return super(AuthorArchive, self).get(request, *args, **kwargs)
 
     def get_queryset(self):
@@ -38,12 +38,15 @@ class AuthorArchive(generic.list.ListView):
 
     def get_context_data(self, **kwargs):
         context = super(AuthorArchive, self).get_context_data(**kwargs)
-        context['author'] = self.author
-        post_list = []
+        context.update({"error_message": "", "post_list": []})
         queryset = self.queryset
-        for post in queryset:
-            post_list.append(post.get_other_details())
-        context['post_list'] = post_list
+        post_list = []
+        if queryset:
+            for post in queryset:
+                post_list.append(post.get_other_details())
+            context['post_list'] = post_list
+        else:
+            context["error_message"] = "No post with these parameters"
         return context
 
 
@@ -132,15 +135,23 @@ class TaxonomyArchive(generic.list.ListView):
     allow_empty = True
     context_object_name = "post_list"
     paginate_by = PER_PAGE
-    template_name = "wordpress/post_list.html"
+    template_name = "wordpress/post_archive.html"
     queryset = None
 
     def get_context_data(self):
         post_list = []
+        context = {"error_message": "", "post": None, "post_list": []}
         queryset = self.queryset
-        for post in queryset:
-            post_list.append(post.get_other_details())
-        return {"post_list": post_list}
+        if queryset:
+            if self.kwargs.get("post_slug", None):
+                context["post"] = queryset[0].get_other_details()
+            else:
+                for post in queryset:
+                    post_list.append(post.get_other_details())
+                context["post_list"] = post_list
+        else:
+            context["error_message"] = "No post with these parameters"
+        return context
 
     def get_queryset(self):
         taxonomy = TAXONOMIES.get(self.kwargs['taxonomy'], None)
@@ -148,6 +159,7 @@ class TaxonomyArchive(generic.list.ListView):
             queryset = Post.objects.term(self.kwargs['category_slug'], taxonomy=taxonomy).select_related()
             if self.kwargs.get("post_slug", None):
                 queryset = queryset.filter(slug=self.kwargs["post_slug"])
+                self.template_name = "wordpress/post_detail.html"
             self.queryset = queryset
             return queryset
 
